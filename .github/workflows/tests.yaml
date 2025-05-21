@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+        - 5432:5432
+
+    steps:
+    - uses: actions/checkout@master
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@master
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install deps (Python < 3.13)
+      if: matrix.python-version < 3.13
+      run: pip install '.[dev]' asyncpg~=0.29.0
+
+    - name: Install deps (Python >= 3.13)
+      if: matrix.python-version >= 3.13
+      run: pip install '.[dev]' asyncpg~=0.30.0
+
+    - name: Run pre commit checks
+      run: pre-commit run --files obx/* tests/*
+
+    - name: Run tests
+      run: pytest --cov=obx

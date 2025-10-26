@@ -3,12 +3,9 @@ import datetime as dt
 import unittest.mock
 import uuid
 
-import asyncpg
-import pytest
-
 from obx import methods
+from obx.conf import Conf
 from obx.connect import Transaction
-from obx.context import Context
 from obx.task import State, Task
 
 
@@ -19,7 +16,7 @@ async def test__start(db, fct_task):
 
     await asyncio.sleep(2)
 
-    Context.set_shutdown()
+    Conf.set_shutdown()
 
     await asyncio.sleep(2)
 
@@ -56,7 +53,7 @@ async def test__handle(db, fct_task):
     async def test():
         pass
 
-    Context.set_handler(t.handler, test)
+    Conf.set_handler(t.handler, test)
 
     await methods.handle(t._asdict())
 
@@ -72,7 +69,7 @@ async def test__handle(db, fct_task):
 async def test__task_insert(db):
     u = uuid.uuid4()
 
-    async with Context.get_connection() as c, Transaction(c):
+    async with Conf.get_connection() as c, Transaction(c):
         await methods.task_insert(c, Task('foo'))
 
         await methods.task_insert(
@@ -129,12 +126,17 @@ async def test__task_insert(db):
         r[1]['start_after'] - dt.datetime.now(dt.timezone.utc)
 
 
-async def test__task_insert__single(fct_task):
-    await fct_task(handler='foo', single=True)
+async def test__task_insert__single(db, fct_task):
+    t = await fct_task(handler='foo', single=True)
 
-    with pytest.raises(asyncpg.UniqueViolationError):
-        async with Context.get_connection() as c, Transaction(c):
-            await methods.task_insert(c, Task('foo').set_single())
+    async with Conf.get_connection() as c, Transaction(c):
+        await methods.task_insert(c, Task('foo').set_single())
+
+    r = await db.fetch('SELECT * FROM obx.tasks')
+
+    assert len(r) == 1
+
+    assert r[0] == t
 
 
 async def test__task_update__done(db, fct_task):

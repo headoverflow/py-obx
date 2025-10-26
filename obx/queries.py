@@ -19,7 +19,7 @@ TABLE_CREATE = _(
     '  id            UUID        NOT NULL DEFAULT uuid_generate_v4(),',
     '  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),',
     '  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),',
-    '  handler       TEXT        NOT NULL,',
+    '  handler       VARCHAR(64) NOT NULL,',
     '  params        JSONB       NOT NULL,',
     '  single        BOOL        NOT NULL DEFAULT FALSE,',
     '  start_after   TIMESTAMPTZ NOT NULL,',
@@ -54,7 +54,7 @@ TASK_INSERT = _(
     '  delta_timeout',
     ')',
     'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-    'RETURNING id',
+    'ON CONFLICT (handler, single) WHERE single = TRUE DO NOTHING',
 )
 
 TASK_SELECT_RUN = _(

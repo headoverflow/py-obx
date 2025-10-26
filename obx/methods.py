@@ -5,9 +5,9 @@ import traceback
 import typing as t
 import uuid
 
-from . import errors, queries
+from . import context, errors, queries
+from .conf import Conf
 from .connect import ABCConnection, Transaction
-from .context import Context
 from .task import State, Task
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ async def migrate():
     exists then migration process will be stopped.
     """
 
-    async with Context.get_connection() as c, Transaction(c):
+    async with Conf.get_connection() as c, Transaction(c):
         r = await c.execute(queries.SCHEMA_EXISTS)
 
         if r[0]['exists']:
@@ -52,15 +52,15 @@ async def start(delay: int = 10, active_tasks_limit: int = 10):
     while 1:
         await asyncio.sleep(delay)
 
-        if Context.get_shutdown():
+        if Conf.get_shutdown():
             break
 
-        log.info('select: counter=%s', Context.get_counter().val())
+        log.info('select: counter=%s', Conf.get_counter().val())
 
         try:
             await task_update(State.timeout)
 
-            limit = active_tasks_limit - Context.get_counter().val()
+            limit = active_tasks_limit - Conf.get_counter().val()
 
             if limit < 1:
                 log.info('active tasks limit exceeded')
@@ -78,7 +78,7 @@ async def start(delay: int = 10, active_tasks_limit: int = 10):
 
 
 async def select(limit: int) -> list[dict]:
-    async with Context.get_connection() as c, Transaction(c):
+    async with Conf.get_connection() as c, Transaction(c):
         r = list(await c.execute(queries.TASK_SELECT_RUN, limit))
 
         if len(r) == 0:
@@ -91,7 +91,7 @@ async def select(limit: int) -> list[dict]:
 
 async def handle(row: dict):
     try:
-        handler = Context.get_handler(row['handler'])
+        handler = Conf.get_handler(row['handler'])
     except errors.TaskHandlerNotSetObxError:
         log.exception(
             'handler not set: id=%s handler=%s',
@@ -103,6 +103,8 @@ async def handle(row: dict):
 
         return
 
+    context.task.set(row)
+
     log.info('task starting: id=%s handler=%s', row['id'], row['handler'])
 
     params = row['params']
@@ -110,7 +112,7 @@ async def handle(row: dict):
     if isinstance(params, str):  # orm specific behavior fix
         params = json.loads(row['params'])
 
-    await Context.get_counter().inc()
+    await Conf.get_counter().inc()
 
     try:
         await handler(**params)
@@ -123,11 +125,11 @@ async def handle(row: dict):
 
         await task_update(State.done, row['id'])
     finally:
-        await Context.get_counter().dec()
+        await Conf.get_counter().dec()
 
 
-async def task_insert(connection: t.Any, task: Task) -> int:
-    """Inserts the task into the tasks table.
+async def task_insert(connection: t.Any, task: Task):
+    """Inserts the task into the `obx.tasks` table.
 
     :param connection:
         Database connection.
@@ -137,11 +139,9 @@ async def task_insert(connection: t.Any, task: Task) -> int:
     """
 
     if not isinstance(connection, ABCConnection):
-        connection = Context.get_connection_type()(connection)
+        connection = Conf.get_connection_type()(connection)
 
-    r = await connection.execute(queries.TASK_INSERT, *task.build())
-
-    return r[0]['id']
+    await connection.execute(queries.TASK_INSERT, *task.build())
 
 
 async def task_update(
@@ -166,7 +166,7 @@ async def task_update(
         Will be ignored if the `target_state` equals `done` or `timeout`.
     """
 
-    async with Context.get_connection() as c:
+    async with Conf.get_connection() as c:
         match target_state:
             case State.done:
                 await c.execute(queries.TASK_UPDATE_DONE, pk)

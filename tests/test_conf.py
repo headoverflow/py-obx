@@ -1,6 +1,6 @@
 import typing as t
 
-from obx.context import Context
+from obx.conf import Conf
 
 
 async def test__add_middleware():
@@ -13,7 +13,7 @@ async def test__add_middleware():
 
         raise ValueError
 
-    Context.set_handler('fn', fn)
+    Conf.set_handler('fn', fn)
 
     async def mw(fn: t.Callable[..., t.Coroutine], *args, **kwargs):
         try:
@@ -23,10 +23,10 @@ async def test__add_middleware():
 
             i += 1
 
-    Context.add_middleware(mw)
+    Conf.add_middleware(mw)
 
     try:
-        await Context.get_handler('fn')()
+        await Conf.get_handler('fn')()
     except ValueError:
         pass
 

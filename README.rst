@@ -34,7 +34,7 @@ Before run the code below, make sure you have installed `asyncpg <https://github
         obx.PooledConnection.set_pool(pool)
 
         (
-            obx.Context
+            obx.Conf
             .set_connection_type(obx.PooledConnection)
             .set_handler('foo', foo)
             .add_middleware(mw)
@@ -56,7 +56,7 @@ Before run the code below, make sure you have installed `asyncpg <https://github
 
         await asyncio.sleep(20)  # waiting for task finished
 
-        obx.Context.set_shutdown()
+        obx.Conf.set_shutdown()
 
 
     async def mw(fn: t.Callable[..., t.Coroutine], *args, **kwargs):

@@ -25,7 +25,7 @@ async def init():
 
     obx.PooledConnection.set_pool(pool)
 
-    obx.Context.set_connection_type(obx.PooledConnection)
+    obx.Conf.set_connection_type(obx.PooledConnection)
 
     await obx.migrate()
 
